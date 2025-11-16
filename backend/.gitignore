@@ -1,0 +1,152 @@
+# Django
+*.log
+*.pot
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+db.sqlite3
+local_settings.py
+*.env
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Node.js/React
+node_modules/
+dist/
+build/
+*.lock
+
+# Media and static files (handled by Django in production)
+media/
+staticfiles/
+
+# macOS
+.DS_Store
+
+# IDEs and editors
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Logs
+logs/
+
+# Test artifacts
+*.pytest_cache/
+.coverage
+htmlcov/
+
+# Docker (if used)
+docker-compose.override.yml
+# Environment variables - CRITICAL TO EXCLUDE
+.env
+.env.local
+.env.development
+.env.production
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+logs/
+
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+Learnify_env/
+Learnify_env_new/
+
+# Node.js (React)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
+
+# React build
+/build
+/dist
+/react_frontend/build
+/react_frontend/dist
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Database
+*.sqlite3
+*.db
+
+# Logs
+logs
+*.log
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Redis dump
+dump.rdb
+
+# Uploaded files (optional - you might want to exclude user uploads)
+uploads/
+user_files/
+
+# Sensitive files
+secrets.json
+private_keys/
+ssl_certificates/
