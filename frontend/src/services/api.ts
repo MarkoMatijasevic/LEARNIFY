@@ -70,6 +70,78 @@ export interface DashboardStats {
   };
 }
 
+// ============================================================================
+// TEST GENERATION TYPES (NEW)
+// ============================================================================
+
+export interface TestQuestion {
+  id: number;
+  question: string;
+  options: {
+    A: string;
+    B: string;
+    C: string;
+  };
+  correct_answer: 'A' | 'B' | 'C';
+  explanation: string;
+}
+
+export interface DocumentTest {
+  id: string;
+  document: string;
+  document_title?: string;
+  created_by: number;
+  title: string;
+  question_count: number;
+  questions: TestQuestion[];
+  status: 'generating' | 'ready' | 'error';
+  generation_error?: string;
+  generation_time_seconds?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TestAttempt {
+  id: string;
+  test: string;
+  test_title?: string;
+  user: number;
+  answers: { [questionId: string]: string };
+  score: number;
+  grade: 'A' | 'B' | 'C' | 'D' | 'F';
+  passed: boolean;
+  correct_count: number;
+  incorrect_count: number;
+  results_detail: TestResultDetail[];
+  time_taken_seconds?: number;
+  started_at: string;
+  completed_at?: string;
+}
+
+export interface TestResultDetail {
+  question_id: number;
+  question: string;
+  options: {
+    A: string;
+    B: string;
+    C: string;
+  };
+  user_answer: string;
+  correct_answer: string;
+  is_correct: boolean;
+  explanation: string;
+}
+
+export interface GenerateTestRequest {
+  document_id: string;
+}
+
+export interface SubmitTestRequest {
+  test_id: string;
+  answers: { [questionId: string]: string };
+  time_taken_seconds?: number;
+}
+
 // Create axios instance
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -223,6 +295,88 @@ export const apiService = {
   changePassword: async (data: { current_password: string; new_password: string; }): Promise<{ message: string }> => {
     const response = await axiosInstance.post('/api/users/change-password/', data);
     return response.data as { message: string };
+  },
+
+  // ============================================================================
+  // TEST GENERATION ENDPOINTS (NEW)
+  // ============================================================================
+
+  /**
+   * Generate a new 20-question test from a document
+   * @param documentId - UUID of the document to generate test from
+   * @returns DocumentTest object with generated questions
+   */
+  generateTest: async (documentId: string): Promise<DocumentTest> => {
+    const response = await axiosInstance.post('/api/documents/tests/generate/', {
+      document_id: documentId
+    });
+    return response.data as DocumentTest;
+  },
+
+  /**
+   * Get a specific test by ID
+   * @param testId - UUID of the test
+   * @returns DocumentTest object
+   */
+  getTest: async (testId: string): Promise<DocumentTest> => {
+    const response = await axiosInstance.get(`/api/documents/tests/${testId}/`);
+    return response.data as DocumentTest;
+  },
+
+  /**
+   * Submit test answers and get results
+   * @param testId - UUID of the test
+   * @param answers - Object mapping question IDs to selected answers
+   * @param timeTakenSeconds - Optional time taken to complete test
+   * @returns TestAttempt object with results
+   */
+  submitTest: async (
+    testId: string,
+    answers: { [questionId: string]: string },
+    timeTakenSeconds?: number
+  ): Promise<TestAttempt> => {
+    const response = await axiosInstance.post(`/api/documents/tests/${testId}/submit/`, {
+      answers,
+      time_taken_seconds: timeTakenSeconds
+    });
+    return response.data as TestAttempt;
+  },
+
+  /**
+   * Get all test attempts for current user
+   * @returns Array of TestAttempt objects
+   */
+  getTestAttempts: async (): Promise<TestAttempt[]> => {
+    const response = await axiosInstance.get('/api/documents/tests/attempts/');
+    return response.data as TestAttempt[];
+  },
+
+  /**
+   * Get test attempts for a specific document
+   * @param documentId - UUID of the document
+   * @returns Array of TestAttempt objects
+   */
+  getDocumentTestAttempts: async (documentId: string): Promise<TestAttempt[]> => {
+    const response = await axiosInstance.get(`/api/documents/${documentId}/test-attempts/`);
+    return response.data as TestAttempt[];
+  },
+
+  /**
+   * Get a specific test attempt by ID
+   * @param attemptId - UUID of the test attempt
+   * @returns TestAttempt object with full results
+   */
+  getTestAttempt: async (attemptId: string): Promise<TestAttempt> => {
+    const response = await axiosInstance.get(`/api/documents/tests/attempts/${attemptId}/`);
+    return response.data as TestAttempt;
+  },
+
+  /**
+   * Delete a test
+   * @param testId - UUID of the test to delete
+   */
+  deleteTest: async (testId: string): Promise<void> => {
+    await axiosInstance.delete(`/api/documents/tests/${testId}/`);
   }
 };
 

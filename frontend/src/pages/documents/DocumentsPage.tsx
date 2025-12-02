@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import apiService, { Document, DocumentCategory } from '../../services/api';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import TestModal from '../../components/ui/TestModal';
 import { 
   BookOpen, 
   FileText, 
@@ -13,7 +14,11 @@ import {
   Filter,
   MessageSquare,
   Trash2,
-  X
+  X,
+  ClipboardList,
+  File,
+  Moon,
+  Sun
 } from 'lucide-react';
 
 const DocumentsPage = () => {
@@ -21,7 +26,18 @@ const DocumentsPage = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // State - Initialize documents as empty array to prevent filter errors
+  // Dark mode state - check localStorage for saved preference
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('darkMode');
+    return saved ? JSON.parse(saved) : false;
+  });
+
+  // Save dark mode preference to localStorage
+  useEffect(() => {
+    localStorage.setItem('darkMode', JSON.stringify(darkMode));
+  }, [darkMode]);
+
+  // State
   const [documents, setDocuments] = useState<Document[]>([]);
   const [categories, setCategories] = useState<DocumentCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -34,6 +50,10 @@ const DocumentsPage = () => {
   const [dragActive, setDragActive] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
+  // Test Modal State
+  const [testModalOpen, setTestModalOpen] = useState(false);
+  const [selectedDocumentForTest, setSelectedDocumentForTest] = useState<Document | null>(null);
+
   const loadDocuments = async () => {
     try {
       setIsLoading(true);
@@ -41,51 +61,24 @@ const DocumentsPage = () => {
       
       const response = await apiService.getDocuments();
       console.log('📊 Documents API response:', response);
-      console.log('📊 Response type:', typeof response);
-      console.log('📊 Is array:', Array.isArray(response));
       
-      // Handle different response formats
       let docsArray: Document[] = [];
       
       if (Array.isArray(response)) {
-        // Direct array response
         docsArray = response;
-        console.log('✅ Loaded documents as direct array:', docsArray.length);
       } else if (response && typeof response === 'object') {
-        // Type assertion for object with possible properties
         const responseObj = response as Record<string, any>;
         
-        // Check for various paginated response formats
         if ('results' in responseObj && Array.isArray(responseObj.results)) {
           docsArray = responseObj.results as Document[];
-          console.log('✅ Loaded documents from paginated response:', docsArray.length);
         } else if ('data' in responseObj && Array.isArray(responseObj.data)) {
           docsArray = responseObj.data as Document[];
-          console.log('✅ Loaded documents from data property:', docsArray.length);
         } else if ('documents' in responseObj && Array.isArray(responseObj.documents)) {
           docsArray = responseObj.documents as Document[];
-          console.log('✅ Loaded documents from documents property:', docsArray.length);
-        } else {
-          // Response is an object but doesn't match expected formats
-          console.warn('⚠️ Unexpected response structure:', Object.keys(responseObj));
-          // Check if it's an error response
-          if ('error' in responseObj || 'message' in responseObj) {
-            setError('Server returned an error while loading documents');
-            docsArray = [];
-          } else {
-            // Unknown structure but not an error - treat as empty
-            console.warn('Unknown response format, treating as empty');
-            docsArray = [];
-          }
         }
-      } else {
-        // Response is neither array nor object
-        console.warn('⚠️ Response is not array or object:', response);
-        docsArray = [];
       }
       
       setDocuments(docsArray);
-      console.log('✅ Final documents state:', docsArray.length, 'documents');
       
     } catch (error: any) {
       console.error('❌ Failed to load documents:', error);
@@ -112,13 +105,9 @@ const DocumentsPage = () => {
   const loadCategories = async () => {
     try {
       const categories = await apiService.getDocumentCategories();
-      console.log('📁 Categories API response:', categories);
-      
-      // Defensive programming for categories
       if (Array.isArray(categories)) {
         setCategories(categories);
       } else {
-        console.warn('Categories API returned unexpected format:', categories);
         setCategories([]);
       }
     } catch (error: any) {
@@ -127,11 +116,9 @@ const DocumentsPage = () => {
     }
   };
 
-  // Load data on mount - with proper dependency array
   useEffect(() => {
     loadDocuments();
     loadCategories();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -203,6 +190,17 @@ const DocumentsPage = () => {
     }
   };
 
+  const handleCreateTest = (document: Document) => {
+    console.log('📝 Creating test for document:', document.title);
+    setSelectedDocumentForTest(document);
+    setTestModalOpen(true);
+  };
+
+  const handleCloseTestModal = () => {
+    setTestModalOpen(false);
+    setSelectedDocumentForTest(null);
+  };
+
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -216,15 +214,15 @@ const DocumentsPage = () => {
     
     switch (safeFileType.toLowerCase()) {
       case 'pdf':
-        return <FileText className="w-6 h-6 text-red-500" />;
+        return <FileText className="w-8 h-8 text-red-500" />;
       case 'docx':
       case 'doc':
-        return <BookOpen className="w-6 h-6 text-blue-500" />;
+        return <BookOpen className="w-8 h-8 text-blue-500" />;
       case 'pptx':
       case 'ppt':
-        return <Presentation className="w-6 h-6 text-orange-500" />;
+        return <Presentation className="w-8 h-8 text-orange-500" />;
       default:
-        return <FileText className="w-6 h-6 text-gray-500" />;
+        return <File className="w-8 h-8 text-gray-500" />;
     }
   };
 
@@ -232,17 +230,16 @@ const DocumentsPage = () => {
     const statusValue = status || 'ready';
     switch (statusValue) {
       case 'processing':
-        return <span className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded">Processing</span>;
+        return <span className={`px-3 py-1 text-sm font-medium rounded-full ${darkMode ? 'bg-yellow-900 text-yellow-200' : 'bg-yellow-100 text-yellow-800'}`}>Processing</span>;
       case 'ready':
-        return <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded">Ready</span>;
+        return <span className={`px-3 py-1 text-sm font-medium rounded-full ${darkMode ? 'bg-green-900 text-green-200' : 'bg-green-100 text-green-800'}`}>Ready</span>;
       case 'error':
-        return <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded">Error</span>;
+        return <span className={`px-3 py-1 text-sm font-medium rounded-full ${darkMode ? 'bg-red-900 text-red-200' : 'bg-red-100 text-red-800'}`}>Error</span>;
       default:
-        return <span className="px-2 py-1 text-xs bg-gray-100 text-gray-800 rounded">Unknown</span>;
+        return <span className={`px-3 py-1 text-sm font-medium rounded-full ${darkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-800'}`}>Unknown</span>;
     }
   };
 
-  // Defensive programming - ensure documents is always an array before filtering
   const safeDocuments = Array.isArray(documents) ? documents : [];
   const filteredDocuments = safeDocuments.filter(doc => {
     const title = doc.title || '';
@@ -266,84 +263,126 @@ const DocumentsPage = () => {
       navigate('/');
     }
   };
+
+  const toggleDarkMode = () => {
+    setDarkMode(!darkMode);
+  };
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
+      <div className={`min-h-screen flex items-center justify-center ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
         <LoadingSpinner />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white">
+    <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
       {/* Header */}
-      <header className="bg-black/50 backdrop-blur-lg border-b border-white/10 sticky top-0 z-40">
+      <header className={`sticky top-0 z-40 shadow-sm ${darkMode ? 'bg-gray-800 border-b border-gray-700' : 'bg-white border-b border-gray-200'}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-red-400 to-red-600 bg-clip-text text-transparent">
+            <div className="flex items-center space-x-8">
+              <h1 className="text-2xl font-bold text-blue-600">
                 Learnify AI
               </h1>
               <nav className="hidden md:flex space-x-6">
-                <Link to="/documents" className="text-red-400 hover:text-red-300 transition-colors font-medium">
+                <Link to="/documents" className={`font-semibold border-b-2 border-blue-600 pb-1 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>
                   Documents
                 </Link>
-                <Link to="/chat" className="text-gray-400 hover:text-white transition-colors">
+                <Link to="/chat" className={`font-medium transition-colors ${darkMode ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-gray-900'}`}>
                   Chat
                 </Link>
               </nav>
             </div>
             
-            <button
-              onClick={handleLogout}
-              className="text-gray-400 hover:text-white transition-colors text-sm md:text-base"
-            >
-              Logout
-            </button>
+            <div className="flex items-center gap-4">
+              {/* Dark Mode Toggle Button */}
+              <button
+                onClick={toggleDarkMode}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all ${
+                  darkMode 
+                    ? 'bg-gray-700 hover:bg-gray-600 text-yellow-400' 
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                }`}
+                title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              >
+                {darkMode ? (
+                  <>
+                    <Sun className="w-5 h-5" />
+                    <span className="hidden sm:inline">Light Mode</span>
+                  </>
+                ) : (
+                  <>
+                    <Moon className="w-5 h-5" />
+                    <span className="hidden sm:inline">Dark Mode</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={handleLogout}
+                className={`font-medium transition-colors px-4 py-2 rounded-lg ${
+                  darkMode 
+                    ? 'text-gray-300 hover:text-white hover:bg-gray-700' 
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Page Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 md:mb-8 gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
           <div>
-            <h2 className="text-2xl md:text-3xl font-bold">My Documents</h2>
-            <p className="text-gray-400 mt-2 text-sm md:text-base">
+            <h2 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>My Documents</h2>
+            <p className={`mt-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
               Upload and manage your study materials
             </p>
           </div>
           
           <button
             onClick={() => setUploadModalOpen(true)}
-            className="w-full sm:w-auto bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 flex items-center justify-center space-x-2 shadow-lg shadow-red-500/30"
+            className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-8 rounded-xl transition-all flex items-center justify-center gap-3 shadow-lg text-lg"
           >
-            <Upload className="w-5 h-5" />
+            <Upload className="w-6 h-6" />
             <span>Upload Document</span>
           </button>
         </div>
 
         {/* Search and Filter */}
-        <div className="bg-white/5 backdrop-blur-lg rounded-xl border border-white/10 p-4 md:p-6 mb-6 md:mb-8 shadow-xl">
+        <div className={`rounded-xl border p-6 mb-8 shadow-sm ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <Search className={`absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 ${darkMode ? 'text-gray-500' : 'text-gray-400'}`} />
               <input
                 type="text"
                 placeholder="Search documents..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/20 rounded-lg focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 text-white placeholder-gray-400 transition-all"
+                className={`w-full pl-12 pr-4 py-4 border rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all text-lg ${
+                  darkMode 
+                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                    : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400'
+                }`}
               />
             </div>
             
-            <div className="relative sm:w-48">
-              <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
+            <div className="relative sm:w-56">
+              <Filter className={`absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 pointer-events-none ${darkMode ? 'text-gray-500' : 'text-gray-400'}`} />
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full pl-10 pr-8 py-3 bg-white/5 border border-white/20 rounded-lg focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 text-white appearance-none cursor-pointer transition-all"
+                className={`w-full pl-12 pr-8 py-4 border rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer transition-all text-lg ${
+                  darkMode 
+                    ? 'bg-gray-700 border-gray-600 text-white' 
+                    : 'bg-gray-50 border-gray-200 text-gray-900'
+                }`}
               >
                 <option value="all">All Categories</option>
                 {Array.isArray(categories) && categories.map(category => (
@@ -358,25 +397,25 @@ const DocumentsPage = () => {
 
         {/* Error Display */}
         {error && (
-          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-6 md:mb-8 animate-fadeIn">
-            <p className="text-red-400 text-sm md:text-base">{error}</p>
+          <div className={`rounded-xl p-4 mb-8 ${darkMode ? 'bg-red-900/50 border border-red-700' : 'bg-red-50 border border-red-200'}`}>
+            <p className={darkMode ? 'text-red-200' : 'text-red-700'}>{error}</p>
             <button
               onClick={loadDocuments}
-              className="mt-2 text-sm text-red-300 hover:text-red-200 underline"
+              className={`mt-2 font-medium underline ${darkMode ? 'text-red-300 hover:text-red-100' : 'text-red-600 hover:text-red-800'}`}
             >
               Try Again
             </button>
           </div>
         )}
 
-        {/* Documents Grid */}
+        {/* Documents List */}
         {filteredDocuments.length === 0 ? (
-          <div className="text-center py-12 md:py-16">
-            <BookOpen className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-400 mb-2">
+          <div className={`text-center py-16 rounded-xl border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <BookOpen className={`w-20 h-20 mx-auto mb-4 ${darkMode ? 'text-gray-600' : 'text-gray-300'}`} />
+            <h3 className={`text-2xl font-semibold mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
               {safeDocuments.length === 0 ? 'No documents yet' : 'No documents match your search'}
             </h3>
-            <p className="text-gray-500 mb-6 text-sm md:text-base">
+            <p className={`mb-8 text-lg ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
               {safeDocuments.length === 0 
                 ? 'Upload your first document to get started'
                 : 'Try adjusting your search or filter criteria'
@@ -385,86 +424,96 @@ const DocumentsPage = () => {
             {safeDocuments.length === 0 && (
               <button
                 onClick={() => setUploadModalOpen(true)}
-                className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg shadow-red-500/30"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-8 rounded-xl transition-all shadow-lg text-lg"
               >
                 Upload Your First Document
               </button>
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+          <div className="space-y-4">
             {filteredDocuments.map((doc) => (
               <div
                 key={doc.id}
-                className="bg-white/5 backdrop-blur-lg rounded-xl border border-white/10 p-5 md:p-6 hover:bg-white/10 hover:border-white/20 transition-all duration-200 transform hover:scale-[1.02] hover:shadow-xl hover:shadow-red-500/10"
+                className={`rounded-xl border p-6 hover:shadow-lg transition-all ${
+                  darkMode 
+                    ? 'bg-gray-800 border-gray-700 hover:border-gray-600' 
+                    : 'bg-white border-gray-200'
+                }`}
               >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center space-x-2">
-                    {getFileIcon(doc.file_type)}
+                <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+                  {/* Left: Icon and Document Info */}
+                  <div className="flex items-start gap-4 flex-1 min-w-0">
+                    <div className={`flex-shrink-0 w-14 h-14 rounded-xl flex items-center justify-center ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                      {getFileIcon(doc.file_type)}
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-1">
+                        <h3 className={`font-semibold text-xl truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                          {doc.title || 'Untitled Document'}
+                        </h3>
+                        {getStatusBadge(doc.status)}
+                      </div>
+                      
+                      <div className={`flex flex-wrap items-center gap-4 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        <span>{formatFileSize(doc.file_size || 0)}</span>
+                        <span>•</span>
+                        <span>{new Date(doc.created_at || doc.uploaded_at).toLocaleDateString()}</span>
+                        {doc.page_count && doc.page_count > 0 && (
+                          <>
+                            <span>•</span>
+                            <span>{doc.page_count} pages</span>
+                          </>
+                        )}
+                        {(doc.category_name || doc.category) && (
+                          <>
+                            <span>•</span>
+                            <span className="text-blue-500">{doc.category_name || doc.category}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    {getStatusBadge(doc.status)}
-                  </div>
-                </div>
-                
-                <h3 className="font-semibold text-base md:text-lg mb-2 text-white line-clamp-2 min-h-[3rem]">
-                  {doc.title || 'Untitled Document'}
-                </h3>
-                
-                <div className="text-xs md:text-sm text-gray-400 mb-4 space-y-1">
-                  <p className="flex items-center">
-                    <span className="inline-block w-16">Size:</span>
-                    <span>{formatFileSize(doc.file_size || 0)}</span>
-                  </p>
-                  <p className="flex items-center">
-                    <span className="inline-block w-16">Date:</span>
-                    <span>{new Date(doc.created_at || doc.uploaded_at).toLocaleDateString()}</span>
-                  </p>
-                  {(doc.category_name || doc.category) && (
-                    <p className="flex items-center text-red-400">
-                      <span className="inline-block w-16">Category:</span>
-                      <span>{doc.category_name || doc.category}</span>
-                    </p>
-                  )}
-                  {(doc.page_count && doc.page_count > 0) && (
-                    <p className="flex items-center">
-                      <span className="inline-block w-16">Pages:</span>
-                      <span>{doc.page_count}</span>
-                    </p>
-                  )}
-                </div>
 
-                {doc.text_preview && (
-                  <p className="text-xs text-gray-500 mb-4 line-clamp-2 italic">
-                    "{doc.text_preview}"
-                  </p>
-                )}
-
-                <div className="flex items-center justify-between gap-2">
-                  {(doc.status || 'ready') === 'ready' ? (
-                    <Link
-                      to={`/chat?document=${doc.id}`}
-                      className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white text-xs md:text-sm font-medium py-2 px-3 rounded-lg transition-all flex-1 text-center shadow-md hover:shadow-lg"
-                    >
-                      <MessageSquare className="w-4 h-4 inline mr-1" />
-                      Chat with AI
-                    </Link>
-                  ) : (
+                  {/* Right: Action Buttons */}
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    {(doc.status || 'ready') === 'ready' ? (
+                      <>
+                        <button
+                          onClick={() => handleCreateTest(doc)}
+                          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl transition-all flex items-center gap-2 shadow-md text-lg"
+                        >
+                          <ClipboardList className="w-5 h-5" />
+                          <span>Create Test</span>
+                        </button>
+                        
+                        <Link
+                          to={`/chat?document=${doc.id}`}
+                          className="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-xl transition-all flex items-center gap-2 shadow-md text-lg"
+                        >
+                          <MessageSquare className="w-5 h-5" />
+                          <span>Chat</span>
+                        </Link>
+                      </>
+                    ) : (
+                      <span className={`font-medium py-3 px-6 ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                        {(doc.status || 'ready') === 'processing' ? 'Processing...' : 'Not Ready'}
+                      </span>
+                    )}
+                    
                     <button
-                      disabled
-                      className="bg-gray-700 text-gray-400 text-xs md:text-sm font-medium py-2 px-3 rounded-lg cursor-not-allowed flex-1"
+                      onClick={() => handleDelete(doc.id)}
+                      className={`p-3 rounded-xl transition-all ${
+                        darkMode 
+                          ? 'text-gray-500 hover:text-red-400 hover:bg-red-900/30' 
+                          : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+                      }`}
+                      title="Delete document"
                     >
-                      {(doc.status || 'ready') === 'processing' ? 'Processing...' : 'Not Ready'}
+                      <Trash2 className="w-6 h-6" />
                     </button>
-                  )}
-                  
-                  <button
-                    onClick={() => handleDelete(doc.id)}
-                    className="text-red-400 hover:text-red-300 hover:bg-red-500/10 p-2 rounded-lg transition-all"
-                    aria-label="Delete document"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -474,43 +523,51 @@ const DocumentsPage = () => {
 
       {/* Upload Modal */}
       {uploadModalOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
-          <div className="bg-gray-900 rounded-xl border border-white/20 p-6 w-full max-w-md shadow-2xl animate-slideUp">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Upload Document</h3>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className={`rounded-2xl shadow-2xl p-8 w-full max-w-md ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Upload Document</h3>
               <button
                 onClick={() => setUploadModalOpen(false)}
-                className="text-gray-400 hover:text-white transition-colors"
-                aria-label="Close modal"
+                className={`transition-colors p-2 rounded-full ${
+                  darkMode 
+                    ? 'text-gray-400 hover:text-white hover:bg-gray-700' 
+                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                }`}
               >
-                <X className="w-5 h-5" />
+                <X className="w-6 h-6" />
               </button>
             </div>
 
             {uploadError && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 mb-4">
-                <p className="text-red-400 text-sm">{uploadError}</p>
+              <div className={`rounded-xl p-4 mb-6 ${darkMode ? 'bg-red-900/50 border border-red-700' : 'bg-red-50 border border-red-200'}`}>
+                <p className={darkMode ? 'text-red-200' : 'text-red-700'}>{uploadError}</p>
               </div>
             )}
 
             <div
-              className={`border-2 border-dashed rounded-lg p-6 text-center transition-all ${
+              className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${
                 dragActive 
-                  ? 'border-red-500 bg-red-500/10 scale-[1.02]' 
-                  : 'border-gray-600 hover:border-gray-500'
+                  ? 'border-blue-500 bg-blue-500/10' 
+                  : darkMode
+                    ? 'border-gray-600 hover:border-gray-500 bg-gray-700/50'
+                    : 'border-gray-300 hover:border-gray-400 bg-gray-50'
               }`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
             >
-              <Upload className={`w-12 h-12 mx-auto mb-4 transition-colors ${
-                dragActive ? 'text-red-400' : 'text-gray-400'
+              <Upload className={`w-16 h-16 mx-auto mb-4 ${
+                dragActive ? 'text-blue-500' : darkMode ? 'text-gray-500' : 'text-gray-400'
               }`} />
-              <p className="text-gray-400 mb-4">
-                Drag and drop your document here, or click to browse
+              <p className={`mb-2 text-lg font-medium ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>
+                Drag and drop your document here
               </p>
-              <p className="text-sm text-gray-500 mb-4">
-                Supported formats: PDF, Word (.docx), PowerPoint (.pptx)
+              <p className={`mb-6 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                or click to browse
+              </p>
+              <p className={`text-sm mb-6 ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                PDF, Word (.docx), PowerPoint (.pptx)
               </p>
               
               <input
@@ -524,21 +581,21 @@ const DocumentsPage = () => {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
-                className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold py-2 px-6 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-8 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg text-lg"
               >
                 {uploading ? 'Uploading...' : 'Choose File'}
               </button>
             </div>
 
             {uploading && (
-              <div className="mt-4">
-                <div className="flex justify-between text-sm text-gray-400 mb-1">
+              <div className="mt-6">
+                <div className={`flex justify-between mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                   <span>Uploading...</span>
-                  <span>{uploadProgress}%</span>
+                  <span className="font-medium">{uploadProgress}%</span>
                 </div>
-                <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
+                <div className={`w-full rounded-full h-3 overflow-hidden ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
                   <div
-                    className="bg-gradient-to-r from-red-500 to-red-600 h-2 rounded-full transition-all duration-300"
+                    className="bg-blue-600 h-3 rounded-full transition-all duration-300"
                     style={{ width: `${uploadProgress}%` }}
                   ></div>
                 </div>
@@ -546,6 +603,15 @@ const DocumentsPage = () => {
             )}
           </div>
         </div>
+      )}
+
+      {/* Test Modal */}
+      {testModalOpen && selectedDocumentForTest && (
+        <TestModal
+          document={selectedDocumentForTest}
+          onClose={handleCloseTestModal}
+          darkMode={darkMode}
+        />
       )}
     </div>
   );

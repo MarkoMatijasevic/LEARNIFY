@@ -72,24 +72,3 @@
     <div id="root"></div>
   </body>
 </html>
-```
-
-**✅ END OF FILE**
-
----
-
-## **🔑 Key Changes:**
-
-### **Line 56 - Fixed connect-src:**
-```
-connect-src 'self' http://localhost:8000 http://127.0.0.1:8000 https://generativelanguage.googleapis.com https://accounts.google.com;
-```
-
-**Added:**
-- ✅ `http://localhost:8000` - Your Django backend
-- ✅ `http://127.0.0.1:8000` - Alternative localhost
-- ✅ Kept Gemini API and Google OAuth
-
-### **Line 54 - Fixed style-src:**
-```
-style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
