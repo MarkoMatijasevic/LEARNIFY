@@ -174,8 +174,11 @@ CORS_ALLOWED_ORIGINS = config(
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_ALL_ORIGINS = DEBUG  # Only in development
 
-# Google AI
-GOOGLE_AI_API_KEY = config('GOOGLE_AI_API_KEY', default='')
+# ============================================================================
+# GOOGLE AI / GEMINI API KEY (UPDATED)
+# ============================================================================
+# Try GEMINI_API_KEY first, fallback to GOOGLE_AI_API_KEY for backwards compatibility
+GEMINI_API_KEY = config('GEMINI_API_KEY', default=config('GOOGLE_AI_API_KEY', default=''))
 
 # Authentication backends
 AUTHENTICATION_BACKENDS = [

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Document, DocumentCategory, DocumentShare
+from .models import Document, DocumentCategory, DocumentShare, DocumentTest, TestAttempt
 import os
 import logging
 import PyPDF2
@@ -289,3 +289,151 @@ class DocumentShareSerializer(serializers.ModelSerializer):
             'shared_with_email', 'permission', 'created_at'
         ]
         read_only_fields = ['id', 'created_at']
+
+# ============================================================================
+# TEST GENERATION SERIALIZERS (NEW)
+# ============================================================================
+
+class TestQuestionSerializer(serializers.Serializer):
+    """Serializer for individual test questions"""
+    id = serializers.IntegerField()
+    question = serializers.CharField()
+    options = serializers.DictField(child=serializers.CharField())
+    correct_answer = serializers.ChoiceField(choices=['A', 'B', 'C'])
+    explanation = serializers.CharField()
+
+
+class DocumentTestSerializer(serializers.ModelSerializer):
+    """Serializer for DocumentTest model"""
+    document_title = serializers.CharField(source='document.title', read_only=True)
+    questions = TestQuestionSerializer(many=True, read_only=True)
+    is_ready = serializers.SerializerMethodField()
+    attempt_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = DocumentTest
+        fields = [
+            'id', 'document', 'document_title', 'created_by',
+            'title', 'question_count', 'questions', 'status',
+            'generation_error', 'generation_time_seconds',
+            'created_at', 'updated_at', 'is_ready', 'attempt_count'
+        ]
+        read_only_fields = [
+            'id', 'created_by', 'questions', 'status',
+            'generation_error', 'generation_time_seconds',
+            'created_at', 'updated_at'
+        ]
+    
+    def get_is_ready(self, obj):
+        return obj.is_ready
+    
+    def get_attempt_count(self, obj):
+        return obj.attempt_count
+
+
+class TestGenerateRequestSerializer(serializers.Serializer):
+    """Serializer for test generation request"""
+    document_id = serializers.UUIDField()
+    
+    def validate_document_id(self, value):
+        """Validate that document exists and belongs to user"""
+        request = self.context.get('request')
+        try:
+            document = Document.objects.get(id=value, user=request.user)
+            
+            # Check if document is ready
+            if not document.is_ready:
+                raise serializers.ValidationError(
+                    "Document is not ready for test generation. "
+                    "Please wait for document processing to complete."
+                )
+            
+            # Check if document has enough content
+            if not document.extracted_text or len(document.extracted_text.strip()) < 100:
+                raise serializers.ValidationError(
+                    "Document does not have enough text content for test generation."
+                )
+            
+            return value
+            
+        except Document.DoesNotExist:
+            raise serializers.ValidationError("Document not found or you don't have access to it.")
+
+
+class TestResultDetailSerializer(serializers.Serializer):
+    """Serializer for individual question result details"""
+    question_id = serializers.IntegerField()
+    question = serializers.CharField()
+    options = serializers.DictField(child=serializers.CharField())
+    user_answer = serializers.CharField(allow_blank=True)
+    correct_answer = serializers.ChoiceField(choices=['A', 'B', 'C'])
+    is_correct = serializers.BooleanField()
+    explanation = serializers.CharField()
+
+
+class TestAttemptSerializer(serializers.ModelSerializer):
+    """Serializer for TestAttempt model"""
+    test_title = serializers.CharField(source='test.title', read_only=True)
+    results_detail = TestResultDetailSerializer(many=True, read_only=True)
+    score_percentage = serializers.SerializerMethodField()
+    time_taken_formatted = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = TestAttempt
+        fields = [
+            'id', 'test', 'test_title', 'user', 'answers',
+            'score', 'score_percentage', 'grade', 'passed',
+            'correct_count', 'incorrect_count', 'results_detail',
+            'time_taken_seconds', 'time_taken_formatted',
+            'started_at', 'completed_at'
+        ]
+        read_only_fields = [
+            'id', 'user', 'score', 'grade', 'passed',
+            'correct_count', 'incorrect_count', 'results_detail',
+            'started_at', 'completed_at'
+        ]
+    
+    def get_score_percentage(self, obj):
+        return obj.score_percentage
+    
+    def get_time_taken_formatted(self, obj):
+        return obj.time_taken_formatted
+
+
+class TestSubmissionSerializer(serializers.Serializer):
+    """Serializer for test submission"""
+    answers = serializers.DictField(
+        child=serializers.ChoiceField(choices=['A', 'B', 'C', '']),
+        help_text="Dictionary mapping question IDs to selected answers (A, B, or C)"
+    )
+    time_taken_seconds = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        help_text="Time taken to complete the test in seconds"
+    )
+    
+    def validate_answers(self, value):
+        """Validate that answers are in correct format"""
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Answers must be a dictionary")
+        
+        # Validate answer values
+        for question_id, answer in value.items():
+            if answer and answer not in ['A', 'B', 'C']:
+                raise serializers.ValidationError(
+                    f"Invalid answer '{answer}' for question {question_id}. "
+                    f"Answer must be A, B, or C."
+                )
+        
+        return value
+    
+    def validate_time_taken_seconds(self, value):
+        """Validate time taken is reasonable"""
+        if value is not None and value < 0:
+            raise serializers.ValidationError("Time taken cannot be negative")
+        
+        if value is not None and value > 86400:  # 24 hours
+            raise serializers.ValidationError("Time taken seems unreasonably long")
+        
+        return value
+
